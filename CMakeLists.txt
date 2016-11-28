@@ -31,6 +31,8 @@
 #
 # Please contact the author of this library if you have any questions.
 # Author: Victor Fragoso (victor.fragoso@mail.wvu.edu)
+# Author: Dustin Teel (dlteel@mix.wvu.edu)
+# Author: Brandon Horn (<Add Email Here>)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
 CMAKE_POLICY(VERSION 3.1)
 
@@ -105,7 +107,7 @@ INCLUDE_DIRECTORIES(
 # For instance:
 # If you want to add the shader_program.cc class and utils.cc, simply do
 # SET(SRC_FILES shader_program.cc utils.cc)
-SET(SRC_FILES)
+SET(SRC_FILES model.cc model.h draw_scene.cc)
 
 ADD_EXECUTABLE(draw_scene draw_scene.cc ${SRC_FILES})
 TARGET_LINK_LIBRARIES(draw_scene
