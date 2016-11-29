@@ -107,7 +107,7 @@ INCLUDE_DIRECTORIES(
 # For instance:
 # If you want to add the shader_program.cc class and utils.cc, simply do
 # SET(SRC_FILES shader_program.cc utils.cc)
-SET(SRC_FILES model.cc draw_scene.cc shader_program.cc transformations.cc)
+SET(SRC_FILES model.cc draw_scene.cc shader_program.cc transformations.cc camera_utils.cc)
 
 ADD_EXECUTABLE(draw_scene draw_scene.cc ${SRC_FILES})
 TARGET_LINK_LIBRARIES(draw_scene
