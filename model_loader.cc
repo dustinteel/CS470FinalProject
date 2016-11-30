@@ -37,6 +37,7 @@
 #include "model_loader.h"
 
 #include <stdio.h>
+#include <iostream>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -133,6 +134,7 @@ void ParseTexelLine(const std::string& line,
   float x, y;
   char temp;
   sscanf(line.c_str(), "%c %f %f", &temp, &x, &y);
+    std::cout << "Texel: x - " << x << " y - " << y << std::endl;
   texels->emplace_back(x, y);
 }
 

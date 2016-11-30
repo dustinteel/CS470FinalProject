@@ -101,8 +101,8 @@ namespace {
     using wvu::Model;
     
     // Window dimensions.
-    constexpr int kWindowWidth = 640;
-    constexpr int kWindowHeight = 480;
+    constexpr int kWindowWidth = 1280/*640*/;
+    constexpr int kWindowHeight = 800/*480*/;
     
     // GLSL shaders.
     // Every shader should declare its version.
@@ -159,8 +159,8 @@ namespace {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         // Define the interpolation behavior for this texture.
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         /// Sending the texture information to the GPU.
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height,
                      0, GL_RGB, GL_UNSIGNED_BYTE, image.data());
@@ -320,6 +320,7 @@ namespace {
         for (int col = 0; col < model_vertices.size(); ++col) {
             vertices.block(0, col, 3, 1) = model_vertices[col];
             vertices.block(3, col, 2, 1) = model_texels[col];
+            std::cout << "x: " << model_texels[col].x() << "y: " << model_texels[col].y() << std::endl ;
         }
         std::vector<GLuint> indices;
         for (int face_id = 0; face_id < model_faces.size(); ++face_id) {
@@ -328,9 +329,11 @@ namespace {
             indices.push_back(face.vertex_indices[1]);
             indices.push_back(face.vertex_indices[2]);
         }
+        
+        
         Model* model;
-        model = new Model(Eigen::Vector3f(0, 0, 0),  // Orientation of object.
-                    Eigen::Vector3f(0, 0, 0),  // Position of object.
+        model = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
+                    Eigen::Vector3f(-2.0f, 0.0f, -7.5f),  // Position of object.
                     vertices,
                     indices);
         
@@ -344,14 +347,14 @@ namespace {
 
         
         
-
-        // TODO: Prepare your models here.
-        // 1. Construct models by setting their vertices and poses.
-        // 2. Create your models in the heap and add the pointers to models_to_draw.
-        // 3. For every added model in models to draw, set the GPU buffers by
-        // calling the method model method SetVerticesIntoGPU().
-        
-        //Prepare and render the pyramid
+//
+//        // TODO: Prepare your models here.
+//        // 1. Construct models by setting their vertices and poses.
+//        // 2. Create your models in the heap and add the pointers to models_to_draw.
+//        // 3. For every added model in models to draw, set the GPU buffers by
+//        // calling the method model method SetVerticesIntoGPU().
+//        
+//        // Prepare and render the pyramid
 //        Eigen::MatrixXf vertices_pyramid(5, 5);
 //        
 //        vertices_pyramid.block(0, 0, 3, 1) = Eigen::Vector3f(-1.0f, -1.0f, 1.0f);
