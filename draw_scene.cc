@@ -41,15 +41,14 @@
 #define GLUTILS_GFLAGS_NAMESPACE gflags
 #endif
 
-// Include first C-Headers.
-#define _USE_MATH_DEFINES  // For using M_PI.
-#include <cmath>
-// Include second C++-Headers.
 #include <iostream>
 #include <string>
-#include <vector>
 
-// Include library headers.
+// Include CImg library to load textures.
+// The macro below disables the capabilities of displaying images in CImg.
+#define cimg_display 0
+#include <CImg.h>
+
 // The macro below tells the linker to use the GLEW library in a static way.
 // This is mainly for compatibility with Windows.
 // Glew is a library that "scans" and knows what "extensions" (i.e.,
@@ -63,37 +62,119 @@
 // See http://www.glfw.org/ for more information.
 #include <GLFW/glfw3.h>
 
-#include <Eigen/Core>
-#include <Eigen/Geometry>
+//Include gflags and glog
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-// Include system headers.
+// Shader program.
 #include "shader_program.h"
+
+// Model.
+#include "model.h"
 #include "model_loader.h"
+
+// Transformation utils.
+#include "transformations.h"
+
+// Camera utils.
+#include "camera_utils.h"
+#include <iostream>
+
+#define _USE_MATH_DEFINES
+#include <gflags/gflags.h>
 
 // Google flags.
 // (<name of the flag>, <default value>, <Brief description of flat>)
 // These will define global variables w/ the following format
 // FLAGS_vertex_shader_filepath and
 // FLAGS_fragment_shader_filepath.
-DEFINE_string(vertex_shader_filepath, "",
-              "Filepath of the vertex shader.");
-DEFINE_string(fragment_shader_filepath, "",
-              "Filepath of the fragment shader.");
-DEFINE_string(model_filepath, "", "Filepath of the model to load.");
+// DEFINE_<type>(name of flag, default value, brief description.)
+// types: string, int32, bool.
+DEFINE_string(texture1_filepath, "",
+              "Filepath of the texture 1.");
+DEFINE_string(texture2_filepath, "",
+              "Filepath of the texture 2.");
+DEFINE_string(model_filepath, "", "Filepath of the first model.");
 
 // Annonymous namespace for constants and helper functions.
 namespace {
+    using wvu::Model;
+    
     // Window dimensions.
     constexpr int kWindowWidth = 640;
     constexpr int kWindowHeight = 480;
+    
+    // GLSL shaders.
+    // Every shader should declare its version.
+    // Vertex shader follows standard 3.3.0.
+    // This shader declares/expexts an input variable named position. This input
+    // should have been loaded into GPU memory for its processing. The shader
+    // essentially sets the gl_Position -- an already defined variable -- that
+    // determines the final position for a vertex.
+    // Note that the position variable is of type vec3, which is a 3D dimensional
+    // vector. The layout keyword determines the way the VAO buffer is arranged in
+    // memory. This way the shader can read the vertices correctly.
+    const std::string vertex_shader_src =
+    "#version 330 core\n"
+    "layout (location = 0) in vec3 position;\n"
+    "layout (location = 1) in vec2 passed_texel;\n"
+    "uniform mat4 model;\n"
+    "uniform mat4 view;\n"
+    "uniform mat4 projection;\n"
+    "out vec2 texel;\n"
+    "\n"
+    "void main() {\n"
+    "gl_Position = projection * view * model * vec4(position, 1.0f);\n"
+    "texel = passed_texel;\n"
+    "}\n";
+    
+    // Fragment shader follows standard 3.3.0. The goal of the fragment shader is to
+    // calculate the color of the pixel corresponding to a vertex. This is why we
+    // declare a variable named color of type vec4 (4D vector) as its output. This
+    // shader sets the output color to a (1.0, 0.5, 0.2, 1.0) using an RGBA format.
+    const std::string fragment_shader_src =
+    "#version 330 core\n"
+    "in vec2 texel;\n"
+    "out vec4 color;\n"
+    "uniform sampler2D texture_sampler;\n"
+    "void main() {\n"
+    "color = texture(texture_sampler, texel);\n"
+    "}\n";
+    
+    // -------------------- Texture helper functions -------------------------------
+    GLuint LoadTexture(const std::string& texture_filepath) {
+        cimg_library::CImg<unsigned char> image;
+        image.load(texture_filepath.c_str());
+        const int width = image.width();
+        const int height = image.height();
+        // OpenGL expects to have the pixel values interleaved (e.g., RGBD, ...). CImg
+        // flatens out the planes. To have them interleaved, CImg has to re-arrange
+        // the values.
+        // Also, OpenGL has the y-axis of the texture flipped.
+        image.permute_axes("cxyz");
+        GLuint texture_id;
+        glGenTextures(1, &texture_id);
+        glBindTexture(GL_TEXTURE_2D, texture_id);
+        // We are configuring texture wrapper, each per dimension,s:x, t:y.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        // Define the interpolation behavior for this texture.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        /// Sending the texture information to the GPU.
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height,
+                     0, GL_RGB, GL_UNSIGNED_BYTE, image.data());
+        // Generate a mipmap.
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        return texture_id;
+    }
     
     // Error callback function. This function follows the required signature of
     // GLFW. See http://www.glfw.org/docs/3.0/group__error.html for more
     // information.
     static void ErrorCallback(int error, const char* description) {
-        LOG(FATAL) << description;
+        std::cerr << "ERROR: " << description << std::endl;
     }
     
     // Key callback. This function follows the required signature of GLFW. See
@@ -107,151 +188,6 @@ namespace {
             glfwSetWindowShouldClose(window, GL_TRUE);
         }
     }
-    
-    // Class that will help us keep the state of any model more easily.
-    class Model {
-    public:
-        // Constructor.
-        // Params
-        //  orientation  Axis of rotation whose norm is the angle
-        //     (aka Rodrigues vector).
-        //  position  The position of the object in the world.
-        //  vertices  The vertices forming the object.
-        //  indices  The sequence indicating how to use the vertices.
-        Model(const Eigen::Vector3f& orientation,
-              const Eigen::Vector3f& position,
-              const Eigen::MatrixXf& vertices,
-              const std::vector<GLuint>& indices) {
-            orientation_ = orientation;
-            position_ = position;
-            vertices_ = vertices;
-            indices_ = indices;
-        }
-        
-        // Constructor.
-        // Params
-        //  orientation  Axis of rotation whose norm is the angle
-        //     (aka Rodrigues vector).
-        //  position  The position of the object in the world.
-        //  vertices  The vertices forming the object.
-        Model(const Eigen::Vector3f& orientation,
-              const Eigen::Vector3f& position,
-              const Eigen::MatrixXf& vertices) {
-            orientation_ = orientation;
-            position_ = position;
-            vertices_ = vertices;
-        }
-        // Default destructor.
-        ~Model() {}
-        
-        // Setters set members by *copying* input parameters.
-        void SetOrientation(const Eigen::Vector3f& orientation) {
-            orientation_ = orientation;
-        }
-        
-        void SetPosition(const Eigen::Vector3f& position);
-        
-        // If we want to avoid copying, we can return a pointer to
-        // the member. Note that making public the attributes work
-        // if we want to modify directly the members. However, this
-        // is a matter of design.
-        Eigen::Vector3f* mutable_orientation() {
-            return &orientation_;
-        }
-        
-        Eigen::Vector3f* mutable_position() {
-            return &position_;
-        }
-        
-        // Getters, return a const reference to the member.
-        const Eigen::Vector3f& GetOrientation() {
-            return orientation_;
-        }
-        
-        const Eigen::Vector3f& GetPosition() {
-            return position_;
-        }
-        
-        const Eigen::MatrixXf& vertices() const {
-            return vertices_;
-        }
-        
-        const std::vector<GLuint>& indices() const {
-            return indices_;
-        }
-        
-    private:
-        // Attributes.
-        // The convention we will use is to define a '_' after the name
-        // of the attribute.
-        Eigen::Vector3f orientation_;
-        Eigen::Vector3f position_;
-        Eigen::MatrixXf vertices_;
-        std::vector<GLuint> indices_;
-    };
-    
-    // Implements the setter for position. Note that the class somehow defines
-    // a namespace.
-    void Model::SetPosition(const Eigen::Vector3f& position) {
-        position_ = position;
-    }
-    
-    // -------------------- Helper Functions ----------------------------------
-    Eigen::Matrix4f ComputeTranslation(
-                                       const Eigen::Vector3f& offset) {
-        Eigen::Matrix4f transformation = Eigen::Matrix4f::Identity();
-        transformation.col(3) = offset.homogeneous();
-        return transformation;
-    }
-    
-    Eigen::Matrix4f ComputeRotation(const Eigen::Vector3f& axis,
-                                    const GLfloat angle) {
-        Eigen::AngleAxisf rotation(angle, axis);
-        Eigen::Matrix4f transformation = Eigen::Matrix4f::Identity();
-        Eigen::Matrix3f rot3 = rotation.matrix();
-        transformation.block(0, 0, 3, 3)  = rot3;
-        return transformation;
-    }
-    
-    // Mathematical constants. The right way to get PI in C++ is to use the
-    // macro M_PI. To do so, we have to include math.h or cmath and define
-    // the _USE_MATH_DEFINES macro to enable these constants. See the header
-    // section.
-    constexpr GLfloat kHalfPi = 0.5f * static_cast<GLfloat>(M_PI);
-    
-    // Compute cotangent. Since C++ does not provide cotangent, we implement it
-    // as follows. Recall that cotangent is essentially tangent flipped and
-    // translated 90 degrees (or PI / 2 radians). To do the flipping and translation
-    // we have to do PI / 2 - angle. Subtracting the angle flips the curve.
-    // See the plots for http://mathworld.wolfram.com/Cotangent.html and
-    // http://mathworld.wolfram.com/Tangent.html
-    inline GLfloat ComputeCotangent(const GLfloat angle) {
-        return tan(kHalfPi - angle);
-    }
-    
-    // Reparametrization of the ComputeProjectionMatrix. This function only
-    // requires 4 parameters rather than 6 parameters.
-    Eigen::Matrix4f ComputeProjectionMatrix(const GLfloat field_of_view,
-                                            const GLfloat aspect_ratio,
-                                            const GLfloat near,
-                                            const GLfloat far) {
-        // Create the projection matrix.
-        const GLfloat y_scale = ComputeCotangent(0.5f * field_of_view);
-        const GLfloat x_scale = y_scale / aspect_ratio;
-        const GLfloat planes_distance = far - near;
-        const GLfloat z_scale =
-        -(near + far) / planes_distance;
-        const GLfloat homogeneous_scale =
-        -2 * near * far / planes_distance;
-        Eigen::Matrix4f projection_matrix;
-        projection_matrix << x_scale, 0.0f, 0.0f, 0.0f,
-        0.0f, y_scale, 0.0f, 0.0f,
-        0.0f, 0.0f, z_scale, homogeneous_scale,
-        0.0f, 0.0f, -1.0f, 0.0f;
-        return projection_matrix;
-    }
-    
-    // -------------------- End of Helper Functions --------------------------------
     
     // Configures glfw.
     void SetWindowHints() {
@@ -287,142 +223,258 @@ namespace {
         // B = Blue, and A = alpha.
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         // Tells OpenGL to clear the Color buffer.
-        glClear(GL_COLOR_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
     
-    GLuint SetElementBufferObject(const Model& model) {
-        // Creating element buffer object (EBO).
-        GLuint element_buffer_object_id;
-        glGenBuffers(1, &element_buffer_object_id);
-        // Set the created EBO as current.
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element_buffer_object_id);
-        const std::vector<GLuint>& indices = model.indices();
-        const int indices_size_in_bytes = indices.size() * sizeof(indices[0]);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                     indices_size_in_bytes,
-                     indices.data(),
-                     GL_STATIC_DRAW);
-        // NOTE: Do not unbing EBO. It turns out that when we create a buffer of type
-        // GL_ELEMENT_ARRAY_BUFFER, the VAO who contains the EBO remembers the
-        // bindings we perform. Thus if we unbind it, we detach the created EBO and we
-        // won't see results.
-        return element_buffer_object_id;
-    }
-    
-    // Creates and transfers the vertices into the GPU. Returns the vertex buffer
-    // object id.
-    GLuint SetVertexBufferObject(const Model& model) {
-        // Create a vertex buffer object (VBO).
-        GLuint vertex_buffer_object_id;
-        glGenBuffers(1, &vertex_buffer_object_id);
-        // Set the GL_ARRAY_BUFFER of OpenGL to the vbo we just created.
-        glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_object_id);
-        // Copy the vertices into the GL_ARRAY_BUFFER that currently 'points' to our
-        // recently created vbo. In this case, sizeof(vertices) returns the size of
-        // the array vertices (defined above) in bytes.
-        // First parameter specifies the destination buffer.
-        // Second parameter specifies the size of the buffer.
-        // Third parameter specifies the pointer to the vertices buffer in RAM.
-        // Fourth parameter specifies the way we want OpenGL to treat the buffer.
-        // There are three different ways to treat this buffer:
-        // 1. GL_STATIC_DRAW: the data will change very rarely.
-        // 2. GL_DYNAMIC_DRAW: the data will likely change.
-        // 3. GL_STREAM_DRAW: the data will change every time it is drawn.
-        // See https://www.opengl.org/sdk/docs/man/html/glBufferData.xhtml.
-        const Eigen::MatrixXf& vertices = model.vertices();
-        const int vertices_size_in_bytes =
-        vertices.rows() * vertices.cols() * sizeof(vertices(0, 0));
-        glBufferData(GL_ARRAY_BUFFER,
-                     vertices_size_in_bytes,
-                     vertices.data(),
-                     GL_STATIC_DRAW);
-        // Inform OpenGL how the vertex buffer is arranged.
-        constexpr GLuint kIndex = 0;  // Index of the first buffer array.
-        // A vertex right now contains 3 elements because we have x, y, z. But we can
-        // add more information per vertex as we will see shortly.
-        constexpr GLuint kNumElementsPerVertex = 3;
-        constexpr GLuint kStride = kNumElementsPerVertex * sizeof(vertices(0, 0));
-        const GLvoid* offset_ptr = nullptr;
-        glVertexAttribPointer(kIndex, kNumElementsPerVertex, GL_FLOAT, GL_FALSE,
-                              kStride, offset_ptr);
-        // Set as active our newly generated VBO.
-        glEnableVertexAttribArray(kIndex);
-        // Unbind buffer so that later we can use it.
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        return vertex_buffer_object_id;
-    }
-    
-    // Creates and sets the vertex array object (VAO) for our triangle. Returns the
-    // id of the created VAO.
-    void SetVertexArrayObject(const Model& model,
-                              GLuint* vertex_buffer_object_id,
-                              GLuint* vertex_array_object_id,
-                              GLuint* element_buffer_object_id) {
-        // Create the vertex array object (VAO).
-        constexpr int kNumVertexArrays = 1;
-        // This function creates kNumVertexArrays vaos and stores the ids in the
-        // array pointed by the second argument.
-        glGenVertexArrays(kNumVertexArrays, vertex_array_object_id);
-        // Set the recently created vertex array object (VAO) current.
-        glBindVertexArray(*vertex_array_object_id);
-        // Create the Vertex Buffer Object (VBO).
-        *vertex_buffer_object_id = SetVertexBufferObject(model);
-        *element_buffer_object_id = SetElementBufferObject(model);
-        // Disable our created VAO.
-        glBindVertexArray(0);
+    bool CreateShaderProgram(wvu::ShaderProgram* shader_program) {
+        if (shader_program == nullptr) return false;
+        shader_program->LoadVertexShaderFromString(vertex_shader_src);
+        shader_program->LoadFragmentShaderFromString(fragment_shader_src);
+        std::string error_info_log;
+        if (!shader_program->Create(&error_info_log)) {
+            std::cout << "ERROR: " << error_info_log << "\n";
+        }
+        if (!shader_program->shader_program_id()) {
+            std::cerr << "ERROR: Could not create a shader program.\n";
+            return false;
+        }
+        return true;
     }
     
     // Renders the scene.
     void RenderScene(const wvu::ShaderProgram& shader_program,
-                     const GLuint vertex_array_object_id,
                      const Eigen::Matrix4f& projection,
-                     const GLfloat angle,
-                     const int num_indices,
+                     const Eigen::Matrix4f& view,
+                     std::vector<Model*>* models_to_draw,
                      GLFWwindow* window) {
+        if(models_to_draw == nullptr || window == nullptr){
+            std::cout << "Null pointer passed.  Could not render scene.";
+            return;
+        }
+        for(int i = 0; i < models_to_draw->size(); i++){
+            if(models_to_draw->at(i) == nullptr){
+                std::cout << "Null pointer passed.  Could not render scene.";
+                return;
+            }
+        }
         // Clear the buffer.
         ClearTheFrameBuffer();
         // Let OpenGL know that we want to use our shader program.
         shader_program.Use();
-        // Get the locations of the uniform variables.
-        const GLint model_location =
-        glGetUniformLocation(shader_program.shader_program_id(), "model");
-        const GLint view_location =
-        glGetUniformLocation(shader_program.shader_program_id(), "view");
-        const GLint projection_location =
-        glGetUniformLocation(shader_program.shader_program_id(), "projection");
-        const GLint vertex_color_location =
-        glGetUniformLocation(shader_program.shader_program_id(), "vertex_color");
-        Eigen::Matrix4f translation =
-        ComputeTranslation(Eigen::Vector3f(0.0f, -2.0f, -8.0f));
-        Eigen::Matrix4f rotation =
-        ComputeRotation(Eigen::Vector3f(0.0, 1.0, 0.0f).normalized(), angle);
-        Eigen::Matrix4f model = translation * rotation;
-        Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
-        // We do not create the projection matrix here because the projection
-        // matrix does not change.
-        // Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
-        glUniformMatrix4fv(model_location, 1, GL_FALSE, model.data());
-        glUniformMatrix4fv(view_location, 1, GL_FALSE, view.data());
-        glUniformMatrix4fv(projection_location, 1, GL_FALSE, projection.data());
-        // Send color.
-        // glUniform4f(vertex_color_location, 1.0f, 0.5f, 0.2f, 1.0f);
-        Eigen::Vector4f color(0.5f, 0.5f, 0.5f, 1.0f);
-        glUniform4fv(vertex_color_location, 1, color.data());
-        // Draw the triangle.
-        // Let OpenGL know what vertex array object we will use.
-        glBindVertexArray(vertex_array_object_id);
-        // Set to GL_LINE instead of GL_FILL to visualize the poligons as wireframes.
+        // Render the models in a wireframe mode.
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        // Using EBOs.
-        glDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_INT, 0);
-        
+        // Draw the models.
+        // TODO: For every model in models_to_draw, call its Draw() method, passing
+        // the view and projection matrices.
+        //Rotate models within loops
+        for(int i = 0; i < models_to_draw->size(); i++){
+            models_to_draw->at(i)->Draw(shader_program, projection, view);
+            //Now, rotate the Models
+            //First, we get the current orientation
+            Eigen::Vector3f current_orientation = models_to_draw->at(i)->orientation();
+            //Now, change the current angle according to time
+            const GLfloat rotation_speed = 50.0f;
+            GLfloat current_angle = wvu::ConvertDegreesToRadians(rotation_speed * static_cast<GLfloat>(glfwGetTime()));
+            //Encode the angle back into the orientation
+            //Current orientation normalized
+            Eigen::Vector3f normalized_orientation = current_orientation.normalized();
+            Eigen::Vector3f new_orientation = current_angle * normalized_orientation;
+            models_to_draw->at(i)->set_orientation(new_orientation);
+        }
         // Let OpenGL know that we are done with our vertex array object.
         glBindVertexArray(0);
+    }
+    
+    void ConstructModels(std::vector<Model*>* models_to_draw) {
+        if(models_to_draw == nullptr){
+            std::cout << "Null pointer passed.  Could not construct models.";
+            return;
+        }
+        for(int i = 0; i < models_to_draw->size(); i++){
+            if(models_to_draw->at(i) == nullptr){
+                std::cout << "Null pointer passed.  Could not construct models.";
+                return;
+            }
+        }
+        
+        // Load model.
+        std::vector<Eigen::Vector3f> model_vertices;
+        std::vector<Eigen::Vector2f> model_texels;
+        std::vector<Eigen::Vector3f> model_normals;
+        std::vector<wvu::Face> model_faces;
+        if (!wvu::LoadObjModel(FLAGS_model_filepath,
+                               &model_vertices,
+                               &model_texels,
+                               &model_normals,
+                               &model_faces)) {
+            LOG(ERROR) << "Could not load model: " << FLAGS_model_filepath;
+            return;
+        }
+        LOG(INFO) << "Model succesfully loaded! "
+        << " Num. Vertices=" << model_vertices.size()
+        << " Num. Triangles=" << model_faces.size();
+        
+        
+        Eigen::MatrixXf vertices(5, model_vertices.size());
+        for (int col = 0; col < model_vertices.size(); ++col) {
+            vertices.block(0, col, 3, 1) = model_vertices[col];
+            vertices.block(3, col, 2, 1) = model_texels[col];
+        }
+        std::vector<GLuint> indices;
+        for (int face_id = 0; face_id < model_faces.size(); ++face_id) {
+            const wvu::Face& face = model_faces[face_id];
+            indices.push_back(face.vertex_indices[0]);
+            indices.push_back(face.vertex_indices[1]);
+            indices.push_back(face.vertex_indices[2]);
+        }
+        Model* model;
+        model = new Model(Eigen::Vector3f(0, 0, 0),  // Orientation of object.
+                    Eigen::Vector3f(0, 0, 0),  // Position of object.
+                    vertices,
+                    indices);
+        
+        GLuint texture_id = LoadTexture(FLAGS_texture1_filepath);
+        model->set_texture(texture_id);
+        models_to_draw->push_back(model);
+        
+        for(int i = 0; i < models_to_draw->size(); i++){
+                        models_to_draw->at(i)->SetVerticesIntoGpu();
+                    }
+
+        
+        
+
+        // TODO: Prepare your models here.
+        // 1. Construct models by setting their vertices and poses.
+        // 2. Create your models in the heap and add the pointers to models_to_draw.
+        // 3. For every added model in models to draw, set the GPU buffers by
+        // calling the method model method SetVerticesIntoGPU().
+        
+        //Prepare and render the pyramid
+//        Eigen::MatrixXf vertices_pyramid(5, 5);
+//        
+//        vertices_pyramid.block(0, 0, 3, 1) = Eigen::Vector3f(-1.0f, -1.0f, 1.0f);
+//        vertices_pyramid.block(3, 0, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+//        
+//        vertices_pyramid.block(0, 1, 3, 1) = Eigen::Vector3f(1.0f, -1.0f, 1.0f);
+//        vertices_pyramid.block(3, 1, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+//        
+//        vertices_pyramid.block(0, 2, 3, 1) = Eigen::Vector3f(1.0f, -1.0f, -1.0f);
+//        vertices_pyramid.block(3, 2, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+//        
+//        vertices_pyramid.block(0, 3, 3, 1) = Eigen::Vector3f(-1.0f, -1.0f, -1.0f);
+//        vertices_pyramid.block(3, 3, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+//        
+//        vertices_pyramid.block(0, 4, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
+//        vertices_pyramid.block(3, 4, 2, 1) = Eigen::Vector2f(0.5f, 1.0f);
+//        
+//        std::vector<GLuint> indices_pyramid = {
+//            0, 1, 4, //First triangle. (Front)
+//            1, 2, 4, //Second triangle. (Right)
+//            2, 3, 4, //Third triangle. (Back)
+//            3, 0, 4, //Fourth trinagle. (Left)
+//            0, 1, 3, //Fifth triangle. (Half of the base)
+//            3, 1, 2  //Sixth triangle  (Other half of the base)
+//        };
+//        
+//        
+//        //Prepare and render the cube for 20pts extra credit
+//        Eigen::MatrixXf vertices(5, 8);
+//        
+//        vertices.block(0, 0, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
+//        vertices.block(3, 0, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+//        
+//        vertices.block(0, 1, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+//        vertices.block(3, 1, 2, 1) = Eigen::Vector2f(0.0f, 1.0f);
+//        
+//        vertices.block(0, 2, 3, 1) = Eigen::Vector3f(1.0f, 1.0f, 0.0f);
+//        vertices.block(3, 2, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+//        
+//        vertices.block(0, 3, 3, 1) = Eigen::Vector3f(1.0f, 0.0f, 0.0f);
+//        vertices.block(3, 3, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
+//        
+//        vertices.block(0, 4, 3, 1) = Eigen::Vector3f(1.0f, 1.0f, -1.0f);
+//        vertices.block(3, 4, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+//        
+//        vertices.block(0, 5, 3, 1) = Eigen::Vector3f(1.0f, 0.0f, -1.0f);
+//        vertices.block(3, 5, 2, 1) = Eigen::Vector2f(0.0f, 1.0f);
+//        
+//        vertices.block(0, 6, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, -1.0f);
+//        vertices.block(3, 6, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+//        
+//        vertices.block(0, 7, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, -1.0f);
+//        vertices.block(3, 7, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
+//        
+//        
+//        
+//        
+//        std::vector<GLuint> indices = {
+//            0, 1, 3,  // First triangle.
+//            0, 3, 2,  // Second triangle.
+//            2, 3, 5,  // Third triangle.
+//            2, 5, 4,  // Fourth triangle.
+//            4, 5, 7,  // Fifth triangle.
+//            4, 7, 6,  // Sixth triangle.
+//            0, 1, 7,  // Seventh triangle.
+//            0, 7, 6,  // Eigth triangle.
+//            0, 4, 6,  // Ninth triangle.
+//            0, 2, 4,  // Tenth triangle.
+//            1, 5, 7,  // Eleventh triangle.
+//            1, 3, 5   // Twelvth triangle.
+//            
+//        };
+//        
+//        
+//        
+//        
+//        Model* cube;
+//        cube = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
+//                         Eigen::Vector3f(1.0f, 0.0f, -7.5f),  // Position of object.
+//                         vertices,
+//                         indices);
+//        
+//        GLuint texture_id = LoadTexture(FLAGS_texture1_filepath);
+//        cube->set_texture(texture_id);
+//        models_to_draw->push_back(cube);
+//        
+//        Model* pyramid;
+//        pyramid = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
+//                            Eigen::Vector3f(-1.0f, 0.0f, -7.5f),  // Position of object.
+//                            vertices_pyramid,
+//                            indices_pyramid);
+//        
+//        GLuint texture_id2 = LoadTexture(FLAGS_texture2_filepath);
+//        pyramid->set_texture(texture_id2);
+//        models_to_draw->push_back(pyramid);
+//        
+//        for(int i = 0; i < models_to_draw->size(); i++){
+//            models_to_draw->at(i)->SetVerticesIntoGpu();
+//        }
+    }
+    
+    void DeleteModels(std::vector<Model*>* models_to_draw) {
+        if(models_to_draw == nullptr){
+            std::cout << "Null pointer passed.  Could not delete models.";
+            return;
+        }
+        for(int i = 0; i < models_to_draw->size(); i++){
+            if(models_to_draw->at(i) == nullptr){
+                std::cout << "Null pointer passed.  Could not delete models.";
+                return;
+            }
+        }
+        // TODO: Implement me!
+        // Call delete on each models to draw.
+        for(int i = 0; i < models_to_draw->size(); i++){
+            delete models_to_draw->at(i);
+        }
     }
     
 }  // namespace
 
 int main(int argc, char** argv) {
+    //Initialize gflags
     GLUTILS_GFLAGS_NAMESPACE::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
     // Initialize the GLFW library.
@@ -437,7 +489,7 @@ int main(int argc, char** argv) {
     SetWindowHints();
     
     // Create a window and its OpenGL context.
-    const std::string window_name = "Hello Triangle";
+    const std::string window_name = "Assignment 3";
     GLFWwindow* window = glfwCreateWindow(kWindowWidth,
                                           kWindowHeight,
                                           window_name.c_str(),
@@ -456,7 +508,7 @@ int main(int argc, char** argv) {
     // Initialize GLEW.
     glewExperimental = GL_TRUE;
     if (glewInit() != GLEW_OK) {
-        LOG(FATAL) << "Glew did not initialize properly!";
+        std::cerr << "Glew did not initialize properly!" << std::endl;
         glfwTerminate();
         return -1;
     }
@@ -465,81 +517,29 @@ int main(int argc, char** argv) {
     ConfigureViewPort(window);
     
     // Compile shaders and create shader program.
-    const std::string vertex_shader_filepath = FLAGS_vertex_shader_filepath;
-    const std::string fragment_shader_filepath = FLAGS_fragment_shader_filepath;
     wvu::ShaderProgram shader_program;
-    LOG(INFO) << "Attempting to load vertex shader from: "
-    << vertex_shader_filepath;
-    shader_program.LoadVertexShaderFromFile(vertex_shader_filepath);
-    LOG(INFO) << "Attempting to load fragment shader from: "
-    << fragment_shader_filepath;
-    shader_program.LoadFragmentShaderFromFile(fragment_shader_filepath);
-    std::string error_info_log;
-    if (!shader_program.Create(&error_info_log)) {
-        LOG(INFO) << "ERROR: " << error_info_log << "\n";
-    }
-    // TODO(vfragoso): Implement me!
-    if (!shader_program.shader_program_id()) {
-        LOG(FATAL) << "ERROR: Could not create a shader program.\n";
+    if (!CreateShaderProgram(&shader_program)) {
         return -1;
     }
     
-    // Load model.
-    std::vector<Eigen::Vector3f> model_vertices;
-    std::vector<Eigen::Vector2f> model_texels;
-    std::vector<Eigen::Vector3f> model_normals;
-    std::vector<wvu::Face> model_faces;
-    if (!wvu::LoadObjModel(FLAGS_model_filepath,
-                           &model_vertices,
-                           &model_texels,
-                           &model_normals,
-                           &model_faces)) {
-        LOG(ERROR) << "Could not load model: " << FLAGS_model_filepath;
-        return -1;
-    }
-    LOG(INFO) << "Model succesfully loaded! "
-    << " Num. Vertices=" << model_vertices.size()
-    << " Num. Triangles=" << model_faces.size();
-    // Prepare buffers to hold the vertices in GPU.
-    GLuint vertex_buffer_object_id;
-    GLuint vertex_array_object_id;
-    GLuint element_buffer_object_id;
-    Eigen::MatrixXf vertices(3, model_vertices.size());
-    for (int col = 0; col < model_vertices.size(); ++col) {
-        vertices.col(col) = model_vertices[col];
-    }
-    std::vector<GLuint> indices;
-    for (int face_id = 0; face_id < model_faces.size(); ++face_id) {
-        const wvu::Face& face = model_faces[face_id];
-        indices.push_back(face.vertex_indices[0]);
-        indices.push_back(face.vertex_indices[1]);
-        indices.push_back(face.vertex_indices[2]);
-    }
-    Model model(Eigen::Vector3f(0, 0, 0),  // Orientation of object.
-                Eigen::Vector3f(0, 0, 0),  // Position of object.
-                vertices,
-                indices);
-    SetVertexArrayObject(model,
-                         &vertex_buffer_object_id,
-                         &vertex_array_object_id,
-                         &element_buffer_object_id);
+    // Construct the models to draw in the scene.
+    std::vector<Model*> models_to_draw;
+    ConstructModels(&models_to_draw);
     
-    // Create projection matrix.
-    const GLfloat field_of_view = M_PI * 45.0f / 180.0f;
-    const GLfloat aspect_ratio = kWindowWidth / kWindowHeight;
-    const Eigen::Matrix4f projection_matrix = 
-    ComputeProjectionMatrix(field_of_view, aspect_ratio, 0.1, 10);
-    GLfloat angle = 0.0f;  // State of rotation.
+    // Construct the camera projection matrix.
+    const float field_of_view = wvu::ConvertDegreesToRadians(45.0f);
+    const float aspect_ratio = static_cast<float>(kWindowWidth / kWindowHeight);
+    const float near_plane = 0.1f;
+    const float far_plane = 10.0f;
+    const Eigen::Matrix4f& projection =
+    wvu::ComputePerspectiveProjectionMatrix(field_of_view, aspect_ratio,
+                                            near_plane, far_plane);
+    const Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
     
     // Loop until the user closes the window.
-    const GLfloat rotation_speed = 50.0f;
     while (!glfwWindowShouldClose(window)) {
         // Render the scene!
-        // Casting using (<type>) -- which is the C way -- is not recommended.
-        // Instead, use static_cast<type>(input argument).
-        angle = rotation_speed * static_cast<GLfloat>(glfwGetTime()) * M_PI / 180.f;
-        RenderScene(shader_program, vertex_array_object_id, 
-                    projection_matrix, angle, indices.size(), window);
+        RenderScene(shader_program, projection, view, &models_to_draw, window);
         
         // Swap front and back buffers.
         glfwSwapBuffers(window);
@@ -549,8 +549,7 @@ int main(int argc, char** argv) {
     }
     
     // Cleaning up tasks.
-    glDeleteVertexArrays(1, &vertex_array_object_id);
-    glDeleteBuffers(1, &vertex_buffer_object_id);
+    DeleteModels(&models_to_draw);
     // Destroy window.
     glfwDestroyWindow(window);
     // Tear down GLFW library.
