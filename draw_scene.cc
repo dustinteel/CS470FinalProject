@@ -95,6 +95,7 @@ DEFINE_string(texture1_filepath, "",
 DEFINE_string(texture2_filepath, "",
               "Filepath of the texture 2.");
 DEFINE_string(model_filepath, "", "Filepath of the first model.");
+DEFINE_string(texture3_filepath, "", "Filepath of the texture 3");
 
 // Annonymous namespace for constants and helper functions.
 namespace {
@@ -320,7 +321,6 @@ namespace {
         for (int col = 0; col < model_vertices.size(); ++col) {
             vertices.block(0, col, 3, 1) = model_vertices[col];
             vertices.block(3, col, 2, 1) = model_texels[col];
-            std::cout << "x: " << model_texels[col].x() << "y: " << model_texels[col].y() << std::endl ;
         }
         std::vector<GLuint> indices;
         for (int face_id = 0; face_id < model_faces.size(); ++face_id) {
@@ -341,119 +341,114 @@ namespace {
         model->set_texture(texture_id);
         models_to_draw->push_back(model);
         
-        for(int i = 0; i < models_to_draw->size(); i++){
-                        models_to_draw->at(i)->SetVerticesIntoGpu();
-                    }
+        
 
+        // TODO: Prepare your models here.
+        // 1. Construct models by setting their vertices and poses.
+        // 2. Create your models in the heap and add the pointers to models_to_draw.
+        // 3. For every added model in models to draw, set the GPU buffers by
+        // calling the method model method SetVerticesIntoGPU().
+        
+        // Prepare and render the pyramid
+        Eigen::MatrixXf vertices_pyramid(5, 5);
+        
+        vertices_pyramid.block(0, 0, 3, 1) = Eigen::Vector3f(-1.0f, -1.0f, 1.0f);
+        vertices_pyramid.block(3, 0, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+        
+        vertices_pyramid.block(0, 1, 3, 1) = Eigen::Vector3f(1.0f, -1.0f, 1.0f);
+        vertices_pyramid.block(3, 1, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+        
+        vertices_pyramid.block(0, 2, 3, 1) = Eigen::Vector3f(1.0f, -1.0f, -1.0f);
+        vertices_pyramid.block(3, 2, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+        
+        vertices_pyramid.block(0, 3, 3, 1) = Eigen::Vector3f(-1.0f, -1.0f, -1.0f);
+        vertices_pyramid.block(3, 3, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+        
+        vertices_pyramid.block(0, 4, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
+        vertices_pyramid.block(3, 4, 2, 1) = Eigen::Vector2f(0.5f, 1.0f);
+        
+        std::vector<GLuint> indices_pyramid = {
+            0, 1, 4, //First triangle. (Front)
+            1, 2, 4, //Second triangle. (Right)
+            2, 3, 4, //Third triangle. (Back)
+            3, 0, 4, //Fourth trinagle. (Left)
+            0, 1, 3, //Fifth triangle. (Half of the base)
+            3, 1, 2  //Sixth triangle  (Other half of the base)
+        };
         
         
-//
-//        // TODO: Prepare your models here.
-//        // 1. Construct models by setting their vertices and poses.
-//        // 2. Create your models in the heap and add the pointers to models_to_draw.
-//        // 3. For every added model in models to draw, set the GPU buffers by
-//        // calling the method model method SetVerticesIntoGPU().
-//        
-//        // Prepare and render the pyramid
-//        Eigen::MatrixXf vertices_pyramid(5, 5);
-//        
-//        vertices_pyramid.block(0, 0, 3, 1) = Eigen::Vector3f(-1.0f, -1.0f, 1.0f);
-//        vertices_pyramid.block(3, 0, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
-//        
-//        vertices_pyramid.block(0, 1, 3, 1) = Eigen::Vector3f(1.0f, -1.0f, 1.0f);
-//        vertices_pyramid.block(3, 1, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
-//        
-//        vertices_pyramid.block(0, 2, 3, 1) = Eigen::Vector3f(1.0f, -1.0f, -1.0f);
-//        vertices_pyramid.block(3, 2, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
-//        
-//        vertices_pyramid.block(0, 3, 3, 1) = Eigen::Vector3f(-1.0f, -1.0f, -1.0f);
-//        vertices_pyramid.block(3, 3, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
-//        
-//        vertices_pyramid.block(0, 4, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
-//        vertices_pyramid.block(3, 4, 2, 1) = Eigen::Vector2f(0.5f, 1.0f);
-//        
-//        std::vector<GLuint> indices_pyramid = {
-//            0, 1, 4, //First triangle. (Front)
-//            1, 2, 4, //Second triangle. (Right)
-//            2, 3, 4, //Third triangle. (Back)
-//            3, 0, 4, //Fourth trinagle. (Left)
-//            0, 1, 3, //Fifth triangle. (Half of the base)
-//            3, 1, 2  //Sixth triangle  (Other half of the base)
-//        };
-//        
-//        
-//        //Prepare and render the cube for 20pts extra credit
-//        Eigen::MatrixXf vertices(5, 8);
-//        
-//        vertices.block(0, 0, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
-//        vertices.block(3, 0, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
-//        
-//        vertices.block(0, 1, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
-//        vertices.block(3, 1, 2, 1) = Eigen::Vector2f(0.0f, 1.0f);
-//        
-//        vertices.block(0, 2, 3, 1) = Eigen::Vector3f(1.0f, 1.0f, 0.0f);
-//        vertices.block(3, 2, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
-//        
-//        vertices.block(0, 3, 3, 1) = Eigen::Vector3f(1.0f, 0.0f, 0.0f);
-//        vertices.block(3, 3, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
-//        
-//        vertices.block(0, 4, 3, 1) = Eigen::Vector3f(1.0f, 1.0f, -1.0f);
-//        vertices.block(3, 4, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
-//        
-//        vertices.block(0, 5, 3, 1) = Eigen::Vector3f(1.0f, 0.0f, -1.0f);
-//        vertices.block(3, 5, 2, 1) = Eigen::Vector2f(0.0f, 1.0f);
-//        
-//        vertices.block(0, 6, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, -1.0f);
-//        vertices.block(3, 6, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
-//        
-//        vertices.block(0, 7, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, -1.0f);
-//        vertices.block(3, 7, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
-//        
-//        
-//        
-//        
-//        std::vector<GLuint> indices = {
-//            0, 1, 3,  // First triangle.
-//            0, 3, 2,  // Second triangle.
-//            2, 3, 5,  // Third triangle.
-//            2, 5, 4,  // Fourth triangle.
-//            4, 5, 7,  // Fifth triangle.
-//            4, 7, 6,  // Sixth triangle.
-//            0, 1, 7,  // Seventh triangle.
-//            0, 7, 6,  // Eigth triangle.
-//            0, 4, 6,  // Ninth triangle.
-//            0, 2, 4,  // Tenth triangle.
-//            1, 5, 7,  // Eleventh triangle.
-//            1, 3, 5   // Twelvth triangle.
-//            
-//        };
-//        
-//        
-//        
-//        
-//        Model* cube;
-//        cube = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
-//                         Eigen::Vector3f(1.0f, 0.0f, -7.5f),  // Position of object.
-//                         vertices,
-//                         indices);
-//        
-//        GLuint texture_id = LoadTexture(FLAGS_texture1_filepath);
-//        cube->set_texture(texture_id);
-//        models_to_draw->push_back(cube);
-//        
-//        Model* pyramid;
-//        pyramid = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
-//                            Eigen::Vector3f(-1.0f, 0.0f, -7.5f),  // Position of object.
-//                            vertices_pyramid,
-//                            indices_pyramid);
-//        
-//        GLuint texture_id2 = LoadTexture(FLAGS_texture2_filepath);
-//        pyramid->set_texture(texture_id2);
-//        models_to_draw->push_back(pyramid);
-//        
-//        for(int i = 0; i < models_to_draw->size(); i++){
-//            models_to_draw->at(i)->SetVerticesIntoGpu();
-//        }
+        //Prepare and render the cube for 20pts extra credit
+        Eigen::MatrixXf vertices_cube(5, 8);
+        
+        vertices_cube.block(0, 0, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
+        vertices_cube.block(3, 0, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+        
+        vertices_cube.block(0, 1, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+        vertices_cube.block(3, 1, 2, 1) = Eigen::Vector2f(0.0f, 1.0f);
+        
+        vertices_cube.block(0, 2, 3, 1) = Eigen::Vector3f(1.0f, 1.0f, 0.0f);
+        vertices_cube.block(3, 2, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+        
+        vertices_cube.block(0, 3, 3, 1) = Eigen::Vector3f(1.0f, 0.0f, 0.0f);
+        vertices_cube.block(3, 3, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
+        
+        vertices_cube.block(0, 4, 3, 1) = Eigen::Vector3f(1.0f, 1.0f, -1.0f);
+        vertices_cube.block(3, 4, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+        
+        vertices_cube.block(0, 5, 3, 1) = Eigen::Vector3f(1.0f, 0.0f, -1.0f);
+        vertices_cube.block(3, 5, 2, 1) = Eigen::Vector2f(0.0f, 1.0f);
+        
+        vertices_cube.block(0, 6, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, -1.0f);
+        vertices_cube.block(3, 6, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+        
+        vertices_cube.block(0, 7, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, -1.0f);
+        vertices_cube.block(3, 7, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
+        
+        
+        
+        
+        std::vector<GLuint> indices_cube = {
+            0, 1, 3,  // First triangle.
+            0, 3, 2,  // Second triangle.
+            2, 3, 5,  // Third triangle.
+            2, 5, 4,  // Fourth triangle.
+            4, 5, 7,  // Fifth triangle.
+            4, 7, 6,  // Sixth triangle.
+            0, 1, 7,  // Seventh triangle.
+            0, 7, 6,  // Eigth triangle.
+            0, 4, 6,  // Ninth triangle.
+            0, 2, 4,  // Tenth triangle.
+            1, 5, 7,  // Eleventh triangle.
+            1, 3, 5   // Twelvth triangle.
+            
+        };
+        
+        
+        
+        
+        Model* cube;
+        cube = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
+                         Eigen::Vector3f(1.0f, 0.0f, -7.5f),  // Position of object.
+                         vertices_cube,
+                         indices_cube);
+        
+        GLuint texture_id2 = LoadTexture(FLAGS_texture2_filepath);
+        cube->set_texture(texture_id2);
+        models_to_draw->push_back(cube);
+        
+        Model* pyramid;
+        pyramid = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
+                            Eigen::Vector3f(-1.0f, 0.0f, -7.5f),  // Position of object.
+                            vertices_pyramid,
+                            indices_pyramid);
+        
+        GLuint texture_id3 = LoadTexture(FLAGS_texture3_filepath);
+        pyramid->set_texture(texture_id3);
+        models_to_draw->push_back(pyramid);
+        
+        for(int i = 0; i < models_to_draw->size(); i++){
+            models_to_draw->at(i)->SetVerticesIntoGpu();
+        }
     }
     
     void DeleteModels(std::vector<Model*>* models_to_draw) {
