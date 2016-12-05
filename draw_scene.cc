@@ -333,7 +333,7 @@ namespace {
         
         Model* model;
         model = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
-                    Eigen::Vector3f(-2.0f, 0.0f, -7.5f),  // Position of object.
+                    Eigen::Vector3f(-2.0f, 1.0f, -7.5f),  // Position of object.
                     vertices,
                     indices);
         
@@ -341,13 +341,6 @@ namespace {
         model->set_texture(texture_id);
         models_to_draw->push_back(model);
         
-        
-
-        // TODO: Prepare your models here.
-        // 1. Construct models by setting their vertices and poses.
-        // 2. Create your models in the heap and add the pointers to models_to_draw.
-        // 3. For every added model in models to draw, set the GPU buffers by
-        // calling the method model method SetVerticesIntoGPU().
         
         // Prepare and render the pyramid
         Eigen::MatrixXf vertices_pyramid(5, 5);
@@ -428,7 +421,7 @@ namespace {
         
         Model* cube;
         cube = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
-                         Eigen::Vector3f(1.0f, 0.0f, -7.5f),  // Position of object.
+                         Eigen::Vector3f(1.0f, 1.0f, -7.5f),  // Position of object.
                          vertices_cube,
                          indices_cube);
         
@@ -438,7 +431,7 @@ namespace {
         
         Model* pyramid;
         pyramid = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
-                            Eigen::Vector3f(-1.0f, 0.0f, -7.5f),  // Position of object.
+                            Eigen::Vector3f(0.0f, -1.0f, -7.5f),  // Position of object.
                             vertices_pyramid,
                             indices_pyramid);
         

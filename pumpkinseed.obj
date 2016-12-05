@@ -1,6 +1,6 @@
 # This file uses centimeters as units for non-parametric coordinates.
 
-mtllib pumpkinseed.mtl
+# mtllib pumpkinseed.mtl
 v 0.472245 1.399231 -0.136658
 v 0.521894 1.443650 -0.158915
 v 0.506025 1.458768 -0.164649
@@ -3587,9 +3587,9 @@ vn 0.693719 -0.214625 -0.687525
 vn 0.999043 -0.010140 0.042542
 vn 0.991628 -0.109132 0.069023
 vn 0.683718 -0.289799 -0.669736
-s off
-g pumpkinseed:pumpkinsd
-usemtl almondKernels:shellSG
+# s off
+# g pumpkinseed:pumpkinsd
+# usemtl almondKernels:shellSG
 f 1/1/1 2/2/2 3/3/3 4/4/4
 f 5/5/5 6/6/6 7/7/7 8/8/8
 f 9/9/9 10/10/10 11/11/11 12/12/12
