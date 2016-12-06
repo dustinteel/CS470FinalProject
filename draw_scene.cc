@@ -71,7 +71,6 @@
 
 // Model.
 #include "model.h"
-#include "model_loader.h"
 
 // Transformation utils.
 #include "transformations.h"
@@ -94,7 +93,6 @@ DEFINE_string(texture1_filepath, "",
               "Filepath of the texture 1.");
 DEFINE_string(texture2_filepath, "",
               "Filepath of the texture 2.");
-DEFINE_string(model_filepath, "", "Filepath of the first model.");
 DEFINE_string(texture3_filepath, "", "Filepath of the texture 3");
 
 // Annonymous namespace for constants and helper functions.
@@ -298,50 +296,6 @@ namespace {
                 return;
             }
         }
-        
-        // Load model.
-        std::vector<Eigen::Vector3f> model_vertices;
-        std::vector<Eigen::Vector2f> model_texels;
-        std::vector<Eigen::Vector3f> model_normals;
-        std::vector<wvu::Face> model_faces;
-        if (!wvu::LoadObjModel(FLAGS_model_filepath,
-                               &model_vertices,
-                               &model_texels,
-                               &model_normals,
-                               &model_faces)) {
-            LOG(ERROR) << "Could not load model: " << FLAGS_model_filepath;
-            return;
-        }
-        LOG(INFO) << "Model succesfully loaded! "
-        << " Num. Vertices=" << model_vertices.size()
-        << " Num. Triangles=" << model_faces.size();
-        
-        
-        Eigen::MatrixXf vertices(5, model_vertices.size());
-        for (int col = 0; col < model_vertices.size(); ++col) {
-            vertices.block(0, col, 3, 1) = model_vertices[col];
-            vertices.block(3, col, 2, 1) = model_texels[col];
-        }
-        std::vector<GLuint> indices;
-        for (int face_id = 0; face_id < model_faces.size(); ++face_id) {
-            const wvu::Face& face = model_faces[face_id];
-            indices.push_back(face.vertex_indices[0]);
-            indices.push_back(face.vertex_indices[1]);
-            indices.push_back(face.vertex_indices[2]);
-        }
-        
-        
-        Model* model;
-        model = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f),  // Orientation of object.
-                    Eigen::Vector3f(-2.0f, 1.0f, -7.5f),  // Position of object.
-                    vertices,
-                    indices);
-        
-        GLuint texture_id = LoadTexture(FLAGS_texture1_filepath);
-        model->set_texture(texture_id);
-        models_to_draw->push_back(model);
-        
-        
         // Prepare and render the pyramid
         Eigen::MatrixXf vertices_pyramid(5, 5);
         
@@ -370,7 +324,77 @@ namespace {
         };
         
         
-        //Prepare and render the cube for 20pts extra credit
+        //Prepare and render the rectangular prism
+        Eigen::MatrixXf vertices_rectangle(5, 12);
+        
+        vertices_rectangle.block(0, 0, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
+        vertices_rectangle.block(3, 0, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+        
+        vertices_rectangle.block(0, 1, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+        vertices_rectangle.block(3, 1, 2, 1) = Eigen::Vector2f(0.0f, 1.0f);
+        
+        vertices_rectangle.block(0, 2, 3, 1) = Eigen::Vector3f(1.0f, 1.0f, 0.0f);
+        vertices_rectangle.block(3, 2, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+        
+        vertices_rectangle.block(0, 3, 3, 1) = Eigen::Vector3f(1.0f, 0.0f, 0.0f);
+        vertices_rectangle.block(3, 3, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
+        
+        vertices_rectangle.block(0, 4, 3, 1) = Eigen::Vector3f(1.0f, 1.0f, -1.0f);
+        vertices_rectangle.block(3, 4, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+        
+        vertices_rectangle.block(0, 5, 3, 1) = Eigen::Vector3f(1.0f, 0.0f, -1.0f);
+        vertices_rectangle.block(3, 5, 2, 1) = Eigen::Vector2f(0.0f, 1.0f);
+        
+        vertices_rectangle.block(0, 6, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, -1.0f);
+        vertices_rectangle.block(3, 6, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+        
+        vertices_rectangle.block(0, 7, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, -1.0f);
+        vertices_rectangle.block(3, 7, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
+        
+        vertices_rectangle.block(0, 8, 3, 1) = Eigen::Vector3f(1.0f, 1.0f, -2.0f);
+        vertices_rectangle.block(3, 8, 2, 1) = Eigen::Vector2f(0.0f, 0.0f);
+        
+        vertices_rectangle.block(0, 9, 3, 1) = Eigen::Vector3f(1.0f, 0.0f, -2.0f);
+        vertices_rectangle.block(3, 9, 2, 1) = Eigen::Vector2f(0.0f, 1.0f);
+        
+        vertices_rectangle.block(0, 10, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, -2.0f);
+        vertices_rectangle.block(3, 10, 2, 1) = Eigen::Vector2f(1.0f, 0.0f);
+        
+        vertices_rectangle.block(0, 11, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, -2.0f);
+        vertices_rectangle.block(3, 11, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
+        
+        std::vector<GLuint> indices_rectangle = {
+            //Front face
+            0, 1, 3, //First triangle
+            0, 3, 2, //Second triangle
+            //Right face
+            2, 3, 5, //Third triangle
+            2, 5, 4, //Fourth triangle
+            4, 5, 9, //Fifth triangle
+            4, 9, 8, //Sixth triangle
+            //Back face
+            10, 11, 9, //Seventh triangle
+            10, 9, 8, //Eighth triangle
+            //Left face
+            0, 1, 7, //Ninth triangle
+            0, 7, 6, //Tenth triangle
+            6, 7, 11, //Eleventh triangle
+            6, 11, 10, //Twelvth triangle
+            //Top face
+            0, 2, 4, //Thirteenth triangle
+            0, 4, 6, //Fourteenth triangle
+            6, 4, 8, //Fifteenth triangle
+            6, 8, 10, //Sixteenth triangle
+            //Bottom face
+            1, 3, 5, //Seventeenth triangle
+            1, 5, 7, //Eighteenth triangle
+            7, 5, 9, //Ninteenth triangle
+            7, 9, 11 //Twentieth triangle
+        };
+        
+        
+        
+        //Prepare and render the cube
         Eigen::MatrixXf vertices_cube(5, 8);
         
         vertices_cube.block(0, 0, 3, 1) = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
@@ -396,8 +420,6 @@ namespace {
         
         vertices_cube.block(0, 7, 3, 1) = Eigen::Vector3f(0.0f, 0.0f, -1.0f);
         vertices_cube.block(3, 7, 2, 1) = Eigen::Vector2f(1.0f, 1.0f);
-        
-        
         
         
         std::vector<GLuint> indices_cube = {
@@ -438,6 +460,16 @@ namespace {
         GLuint texture_id3 = LoadTexture(FLAGS_texture3_filepath);
         pyramid->set_texture(texture_id3);
         models_to_draw->push_back(pyramid);
+        
+        Model* rectangle;
+        rectangle = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f), //Orientation of object.
+                              Eigen::Vector3f(-2.0f, 1.0f, -7.5f), //Position of object.
+                              vertices_rectangle,
+                              indices_rectangle);
+        
+        GLuint texture_id = LoadTexture(FLAGS_texture1_filepath);
+        rectangle->set_texture(texture_id);
+        models_to_draw->push_back(rectangle);
         
         for(int i = 0; i < models_to_draw->size(); i++){
             models_to_draw->at(i)->SetVerticesIntoGpu();
