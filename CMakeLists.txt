@@ -32,7 +32,7 @@
 # Please contact the author of this library if you have any questions.
 # Author: Victor Fragoso (victor.fragoso@mail.wvu.edu)
 # Author: Dustin Teel (dlteel@mix.wvu.edu)
-# Author: Brandon Horn (<Add Email Here>)
+# Author: Brandon Horn (bhorn1@mix.wvu.edu)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
 CMAKE_POLICY(VERSION 3.1)
 
