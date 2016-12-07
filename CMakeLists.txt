@@ -109,6 +109,54 @@ INCLUDE_DIRECTORIES(
 # SET(SRC_FILES shader_program.cc utils.cc)
 SET(SRC_FILES model.cc draw_scene.cc shader_program.cc transformations.cc camera_utils.cc)
 
+########################################################################
+# Compilation flags.
+IF (CMAKE_BUILD_TYPE STREQUAL "Release")
+IF (CMAKE_COMPILER_IS_GNUCXX)
+# Linux
+IF (CMAKE_SYSTEM_NAME MATCHES "Linux")
+IF (NOT GCC_VERSION VERSION_LESS 4.2)
+SET (OPTIMO_CXX_FLAGS "${OPTIMO_CXX_FLAGS} -Ofast -march=native -mtune=native -msse2 -msse3 -msse4 -fdiagnostics-color=always")
+ENDIF (NOT GCC_VERSION VERSION_LESS 4.2)
+ENDIF (CMAKE_SYSTEM_NAME MATCHES "Linux")
+# Mac OS X
+IF (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+SET (OPTIMO_CXX_FLAGS "${OPTIMO_CXX_FLAGS} -msse3 -msse4 -msse3 -msse2")
+EXECUTE_PROCESS(COMMAND ${CMAKE_C_COMPILER}
+ARGS ${CMAKE_CXX_COMPILER_ARG1} -dumpversion
+OUTPUT_VARIABLE GCC_VERSION
+OUTPUT_STRIP_TRAILING_WHITESPACE)
+IF (GCC_VERSION VERSION_LESS 4.3)
+SET (OPTIMO_CXX_FLAGS "${OPTIMO_CXX_FLAGS} -fast")
+ENDIF (GCC_VERSION VERSION_LESS 4.3)
+ENDIF (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+ENDIF (CMAKE_COMPILER_IS_GNUCXX)
+IF (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+SET (OPTIMO_CXX_FLAGS "-Ofast -ffast-math -fvectorize -funroll-loops -Qunused-arguments -mllvm -inline-threshold=600")
+ENDIF ()
+ENDIF (CMAKE_BUILD_TYPE STREQUAL "Release")
+
+SET (CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${OPTIMO_CXX_FLAGS} -DNDEBUG")
+
+IF (CMAKE_BUILD_TYPE STREQUAL "Debug")
+IF (CMAKE_COMPILER_IS_GNUCXX)
+# Linux
+IF (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3 -O0")
+ENDIF (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+# Mac OS X
+IF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3 -O0")
+ENDIF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+ENDIF (CMAKE_COMPILER_IS_GNUCXX)
+# CLANG
+IF (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_DEBUG} -g3 -O0")
+ENDIF ()
+ENDIF ()
+########################################################################
+
+
 ADD_EXECUTABLE(draw_scene draw_scene.cc ${SRC_FILES})
 TARGET_LINK_LIBRARIES(draw_scene
   glfw

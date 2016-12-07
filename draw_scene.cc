@@ -1,3 +1,6 @@
+//---------------------------------------------------------------------------
+
+
 // Copyright (C) 2016 West Virginia University.
 // All rights reserved.
 //
@@ -512,7 +515,7 @@ int main(int argc, char** argv) {
     SetWindowHints();
     
     // Create a window and its OpenGL context.
-    const std::string window_name = "Assignment 3";
+    const std::string window_name = "Final Project";
     GLFWwindow* window = glfwCreateWindow(kWindowWidth,
                                           kWindowHeight,
                                           window_name.c_str(),
