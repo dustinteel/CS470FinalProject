@@ -441,7 +441,15 @@ namespace {
             
         };
         
+        Model* rectangle;
+        rectangle = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f), //Orientation of object.
+                              Eigen::Vector3f(-2.0f, 1.0f, -7.5f), //Position of object.
+                              vertices_rectangle,
+                              indices_rectangle);
         
+        GLuint texture_id = LoadTexture(FLAGS_texture1_filepath);
+        rectangle->set_texture(texture_id);
+        models_to_draw->push_back(rectangle);
         
         
         Model* cube;
@@ -464,15 +472,6 @@ namespace {
         pyramid->set_texture(texture_id3);
         models_to_draw->push_back(pyramid);
         
-        Model* rectangle;
-        rectangle = new Model(Eigen::Vector3f(1.0f, 1.0f, -1.0f), //Orientation of object.
-                              Eigen::Vector3f(-2.0f, 1.0f, -7.5f), //Position of object.
-                              vertices_rectangle,
-                              indices_rectangle);
-        
-        GLuint texture_id = LoadTexture(FLAGS_texture1_filepath);
-        rectangle->set_texture(texture_id);
-        models_to_draw->push_back(rectangle);
         
         for(int i = 0; i < models_to_draw->size(); i++){
             models_to_draw->at(i)->SetVerticesIntoGpu();
